@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- LOOM-8's screen, large, on the computer it is plugged into. The glass protocol is loom_mirror.js
+     (fm1-base device/mirror.c, the mirror this firmware already sends: cmds 0x50-0x54 over USB MIDI).
+     The note log, chord names, chord explainer, Learn and the chord quiz below are the screen-mirror
+     page's, kept as they were. The Ask / Restore panel is not here (its SysEx would hit LOOM-8's sample bank).
+     The CPU / voices / BPM strip is not here either: this protocol does not carry those numbers.
+     Serve this folder over http (Chrome or Edge, Web MIDI with SysEx). See README.md. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LOOM-8 Display</title>
+<style>
+  :root { --bg: #f4efe4; --tile: #e6dfd0; --raise: #d7cdb9; --fg: #221e18; --dim: #5f574a; --accent: #ff5a36;
+          --stage: #000; color-scheme: light; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #0c0c0c; --tile: #1e1e1e; --raise: #2c2c2c; --fg: #fff; --dim: #8c8c8c;
+      color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { --bg: #0c0c0c; --tile: #1e1e1e; --raise: #2c2c2c; --fg: #fff; --dim: #8c8c8c; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, -apple-system, sans-serif;
+         display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 16px; flex-wrap: wrap; }
+  header h1 { font-size: 15px; font-weight: 600; margin: 0 8px 0 0; }
+  button { font: inherit; color: var(--fg); background: var(--tile); border: 0; padding: 6px 12px; cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--raise); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); color: #111; font-weight: 600; }
+  #status { color: var(--dim); margin-left: auto; font-variant-numeric: tabular-nums; }
+  main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 0 16px 16px; }
+  #stagebox { flex: 1; min-height: 160px; display: grid; place-items: center; container-type: size; }
+  #stage { position: relative; width: min(100cqw, 100cqh); aspect-ratio: 1; background: var(--stage); }
+  canvas { width: 100%; height: 100%; display: block; }   /* (scaled smoothly) */
+  #hint { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px;
+          color: #bbb; background: #000; }
+  #hint p { max-width: 30em; margin: 0 0 8px; }
+  #hint code { color: #fff; }
+  #hint[hidden] { display: none; }
+  label { display: flex; align-items: center; gap: 4px; color: var(--dim); }
+  /* the unit's stats */
+  #stats { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; font-size: 13px; color: var(--dim);
+           font-variant-numeric: tabular-nums; }
+  #stats b { color: var(--fg); font-weight: 600; }
+  #stats .bad b { color: #e5484d; }
+  #stats canvas { width: 120px; height: 24px; background: var(--tile); }
+  #stats[hidden] { display: none; }
+  /* the MIDI log */
+  #midi { background: var(--tile); }
+  #midi > summary { cursor: pointer; padding: 6px 10px; color: var(--dim); font-size: 13px; }
+  #midi[open] > summary { color: var(--fg); }
+  #midi > summary { display: flex; align-items: center; gap: 10px; list-style: none; }
+  #midi > summary::-webkit-details-marker { display: none; }
+  #midi > summary { cursor: default; }
+  #midi .m-tog { cursor: pointer; white-space: nowrap; }           /* (only this opens and closes the panel) */
+  #midi .m-tog::before { content: "▸ "; }
+  #midi[open] .m-tog::before { content: "▾ "; }
+  #m-strip { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; font: 13px ui-monospace, Menlo, monospace;
+             color: var(--fg); background: var(--bg); padding: 3px 8px; }
+  #m-strip:empty::before { content: "no notes yet"; color: var(--dim); }
+  #m-strip { user-select: text; -webkit-user-select: text; cursor: text; }
+  #m-strip .chord { color: var(--accent); cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+  #m-strip .chord.spread { color: #e6c229; }          /* (built up one by one, not struck together) */
+  #midi[open] #m-strip, #midi[open] #m-line, #midi[open] #m-learn { display: none; }
+  #m-line, #m-learn { padding: 2px 8px; font-size: 12px; white-space: nowrap; }
+  #m-learn[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  #chord-dlg form { display: flex; align-items: center; gap: 12px; }
+  #m-test { padding: 2px 8px; font-size: 12px; white-space: nowrap; }
+  #midi[open] #m-test { display: none; }
+  #quiz-dlg { width: min(92vw, 720px); max-width: none; margin: 4vh auto auto; max-height: 92vh; overflow-y: auto;
+              border: 0; padding: 16px; background: var(--tile); color: var(--fg); font-size: 14px; }
+  #quiz-dlg::backdrop { background: rgb(0 0 0 / .5); }
+  #quiz-dlg .q-top { display: flex; gap: 10px; align-items: center; color: var(--dim); font-size: 13px; }
+  #quiz-dlg .q-top select { font: inherit; color: var(--fg); background: var(--bg); border: 0; padding: 4px; flex: 1; min-width: 0; }
+  #quiz-dlg .q-bar { height: 4px; background: var(--bg); margin: 8px 0 4px; }
+  #quiz-dlg .q-bar > i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+  #q-target { font-size: 56px; font-weight: 700; line-height: 1.1; margin-top: 10px; }
+  #q-kind { color: var(--dim); margin-bottom: 8px; }
+  #q-say { min-height: 1.5em; font-size: 16px; margin: 6px 0; }
+  #q-say.ok { color: #3c3; } #q-say.no { color: #e55; }
+  #q-keys .keys { display: block; width: 100%; height: auto; }
+  #q-keys:empty { display: none; }
+  #quiz-dlg .q-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  #chord-dlg form label { flex: 1; text-align: left; color: var(--dim); font-size: 13px; }
+  #chord-dlg { width: min(92vw, 720px); max-width: none; margin: 4vh auto auto; max-height: 92vh; overflow-y: auto; border: 0; padding: 16px; background: var(--tile); color: var(--fg);
+               font-size: 14px; line-height: 1.45; }
+  #chord-dlg::backdrop { background: rgb(0 0 0 / .5); }
+  #chord-dlg h3 { margin: 0 0 2px; font-size: 18px; }
+  #chord-dlg .sub { color: var(--dim); margin-bottom: 10px; }
+  #chord-dlg h4 { margin: 12px 0 2px; font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
+  #chord-dlg p { margin: 0; }
+  #chord-dlg ul { margin: 0; padding-left: 18px; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+  #chord-dlg form { text-align: right; margin-top: 14px; }
+  #chord-dlg .keys { display: block; width: 100%; height: auto; margin: 2px 0 0; }
+  .kbox { overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+  #chord-dlg .kb { font-size: 13px; color: var(--dim); margin-top: 6px; }
+  #midi .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 10px 8px; }
+  #midi select, #midi input { font: inherit; color: var(--fg); background: var(--bg); border: 0; padding: 5px 6px; }
+  #midi input { width: 4em; }
+  #midi .grow { flex: 1; color: var(--dim); font-size: 12px; min-width: 12em; }
+  #midilog { margin: 0; padding: 8px 10px; max-height: 32vh; overflow: auto; background: var(--bg);
+             font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre; }
+  body:fullscreen header, body:fullscreen #stats, body:fullscreen #midi, body:fullscreen #lk { display: none; }
+  body:fullscreen main { padding: 0; background: #000; }
+  /* a phone (narrow, or landscape and short): the page scrolls; the screen as wide as the page, or as tall as the
+     view under the header, whichever is less */
+  @media (max-width: 820px), (max-height: 520px) {
+    html, body { height: auto; min-height: 100%; }
+    header { gap: 6px;
+             padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px
+                      max(12px, env(safe-area-inset-left)); }
+    header h1 { font-size: 14px; }
+    @media (max-width: 520px) { header h1 { display: none; } }   /* (the tab has the name: the buttons on one line) */
+    #status { font-size: 12px; }
+    main { flex: none; padding: 0 max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom))
+                                  max(12px, env(safe-area-inset-left)); }
+    #stagebox { flex: none; min-height: 0; display: block; container-type: normal; }
+    #stage { width: min(100%, calc(100svh - 92px)); margin: 0 auto; }
+    #hint { font-size: 13px; padding: 12px; overflow: auto; }
+    #midilog { max-height: 40svh; }
+    body:fullscreen main { height: 100svh; display: grid; place-items: center; }
+    body:fullscreen #stage { width: min(100vw, 100svh); }
+  }
+  @media (pointer: coarse) {                         /* fingers: targets ~40 px */
+    button { min-height: 40px; padding: 8px 14px; }
+    #midi select, #midi input { min-height: 36px; }
+    #m-strip .chord { padding: 8px 3px; margin: -8px 0; }   /* (a taller tap target, the line's height unchanged) */
+    #cd-learn { width: 22px; height: 22px; vertical-align: middle; }
+  }
+  /* the chords on a phone: the strip a line of its own under the buttons, the dialogs nearly the whole screen, the
+     FM-1's keys at a readable size (wider than the dialog: they scroll sideways, the chord brought into view) */
+  @media (max-width: 820px) {
+    #midi > summary { flex-wrap: wrap; row-gap: 6px; padding: 8px max(12px, env(safe-area-inset-right)) 8px
+                                                            max(12px, env(safe-area-inset-left)); }
+    #midi .m-tog { flex: 1; font-size: 14px; }
+    #m-strip { order: 9; flex-basis: 100%; font-size: 15px; padding: 8px 10px; }
+    #m-test, #m-learn, #m-line { min-height: 34px; padding: 4px 10px; font-size: 13px; }
+    #midi .wide { display: none; }               /* (Test, Learn, Copy: one line beside the label) */
+    #chord-dlg, #quiz-dlg { width: calc(100vw - 16px); margin: max(8px, env(safe-area-inset-top)) auto auto;
+                            max-height: calc(100svh - 16px); padding: 14px 14px max(14px, env(safe-area-inset-bottom)); }
+    .kbox .keys { min-width: 560px; }
+    .kbox { margin: 0 -14px; padding: 0 14px; }
+    #chord-dlg form { flex-wrap: wrap; position: sticky; bottom: calc(-1 * max(14px, env(safe-area-inset-bottom))); background: var(--tile); padding: 10px 0 0; }
+    #chord-dlg form label { flex-basis: 60%; font-size: 14px; }
+    #chord-dlg form button { flex: 1; }
+    #chord-dlg h3 { font-size: 22px; }
+    #q-target { font-size: 44px; }
+    #quiz-dlg .q-btns button { flex: 1; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>LOOM-8 Display</h1>
+  <button id="connect" class="primary">Connect</button>
+  <button id="disconnect" disabled>Disconnect</button>
+  <button id="resync" disabled title="Ask the unit for the whole screen again">Redraw</button>
+  <button id="full" title="Full screen (F)">Full screen</button>
+  <span id="status">Not connected</span>
+</header>
+<main>
+  <div id="stagebox"><div id="stage">
+    <canvas id="screen" width="240" height="240" role="img" aria-label="The FM-1's screen"></canvas>
+    <div id="hint">
+      <div>
+        <p id="hintText">Plug the FM-1 in over USB and press <b>Connect</b>.</p>
+        <p>LOOM-8 sends this mirror in every build. Chrome or Edge, this page served over http, MIDI with SysEx allowed.</p>
+      </div>
+    </div>
+  </div></div>
+  <details id="midi">
+    <summary id="m-sum"><span class="m-tog">Notes played</span> <span id="m-strip" aria-live="off"></span>
+      <button id="m-test" title="Test: play the chord it asks for, from easy to hard">Test<span class="wide"> chords</span></button>
+      <button id="m-learn" aria-pressed="false" title="Learn chords: each chord you play opens what it is">Learn<span class="wide"> chords</span></button>
+      <button id="m-line" title="Copy this line">Copy</button></summary>
+    <div class="row">
+      <button id="m-allow" hidden>Allow MIDI</button>
+      <select id="m-in" aria-label="MIDI input" disabled><option>FM-1 MIDI port</option></select>
+      <span class="grow" id="m-note">The notes the FM-1 sends over USB MIDI (Setup, NOTES on: track N on channel N).</span>
+      <button id="m-copy">Copy last <input id="m-n" type="number" min="1" value="16" aria-label="How many notes"> notes</button>
+      <button id="m-all">Copy all</button>
+      <button id="m-clear">Clear</button>
+    </div>
+    <pre id="midilog" aria-live="off"></pre>
+  </details>
+</main>
+<dialog id="chord-dlg" aria-labelledby="cd-title"><div id="cd-body"></div>
+  <form method="dialog"><label><input type="checkbox" id="cd-learn"> Learn chords: open this for each chord I play</label>
+    <button autofocus>Close</button></form></dialog>
+<dialog id="quiz-dlg" aria-labelledby="q-target">
+  <div class="q-top"><span>Level</span><select id="q-level" aria-label="Level"></select><span id="q-count"></span></div>
+  <div class="q-bar"><i id="q-bar"></i></div>
+  <div id="q-target"></div><div id="q-kind"></div>
+  <div id="q-say" aria-live="polite"></div>
+  <div id="q-keys"></div>
+  <div class="q-btns"><button id="q-hint">Hint</button><button id="q-skip">Skip</button><button id="q-stop">Stop</button></div>
+</dialog>
+<script type="module">
+import { createLoomMirror, mrRequest } from "./loom_mirror.js";
+"use strict";
+const $ = id => document.getElementById(id);
+const canvas = $("screen"), ctx = canvas.getContext("2d");
+const img = ctx.createImageData(240, 240);
+const px = new Uint32Array(img.data.buffer);       // RGBA, little-endian words
+const rgba = new Uint32Array(65536);               // RGB565 (high byte first) -> RGBA
+for (let v = 0; v < 65536; v++) {
+  const r = (v >> 11) & 31, g = (v >> 5) & 63, b = v & 31;
+  rgba[v] = 0xFF000000 | ((b * 527 + 23) >> 6) << 16 | ((g * 259 + 33) >> 6) << 8 | ((r * 527 + 23) >> 6);
+}
+px.fill(0xFF000000);
+let dirty = false;
+let unitBpm = 0;                                     // this protocol has no BPM; the copied note text leaves it out
+
+// the glass (loom_mirror.js). A rect paints into the canvas; a gap asks for the whole screen again.
+let mirror;
+function paintRect(x, y, w, h) {
+  if (x + w > 240 || y + h > 240) return;
+  const s = mirror.screen;
+  for (let row = y; row < y + h; row++) {
+    let o = row * 240 + x;
+    for (let col = 0; col < w; col++, o++) px[o] = rgba[s[o]];
+  }
+  dirty = true;
+}
+
+// ---- the notes played: what the unit sends over USB MIDI (Web MIDI), a line each ----
+// Free play as it came: each note's time (Web MIDI's, ms), channel, pitch, velocity and, once its note-off comes, its
+// length. No bars: the copied text has the BPM, an AI fits the notes to bars. The last MIDI_KEEP notes are kept.
+const MIDI_KEEP = 2000;
+const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const mlog = { notes: [], held: new Map(), dirty: false };
+const noteName = n => NAMES[n % 12] + (Math.floor(n / 12) - 1);           // (60: C4)
+function midiReset() { mlog.notes.length = 0; mlog.held.clear(); stripReset(); mlog.dirty = true; }
+
+// ---- the strip (the collapsed panel's one line): the last notes, the newest on the left, in a circular buffer of
+// STRIP_N. A chord is the notes held at once: when 3+ pitch classes sound together (however they came in: struck at
+// once or one by one and held) a chord goes in; while all its notes are held it grows in place (C, then B: Cmaj7);
+// let one go and the next is a new one. Channel 10 (drums) is left out of chords. Struck together (every note within
+// CHORD_MS of the first): the accent color; built up one by one: yellow ----
+const STRIP_N = 32, CHORD_MS = 50;
+const strip = { buf: new Array(STRIP_N), head: -1, count: 0, chord: null, dirty: true };
+function stripReset() { strip.head = -1; strip.count = 0; strip.chord = null; strip.dirty = true; }
+function stripPush(tok) {
+  strip.head = (strip.head + 1) % STRIP_N;
+  strip.buf[strip.head] = tok;
+  strip.count = Math.min(strip.count + 1, STRIP_N);
+}
+// A chord stands for its notes: the notes that built it (the last ones in the strip, each held note once) are taken
+// out for it, and a note that grows it goes into it, not beside it
+function stripNote(n, chan) {                       // after the note-on is in mlog.held
+  strip.dirty = true;
+  const es = [...mlog.held.values()].filter(e => e.ch !== 10), held = es.map(e => e.n);
+  const ch = chan === 10 ? null : chordName(held), c = strip.chord, ts = es.map(e => e.t);
+  if (!ch) { stripPush({ notes: [n] }); return; }
+  const tok = { ...ch, notes: held, spread: Math.max(...ts) - Math.min(...ts) > CHORD_MS };
+  if (c && c.notes.every(x => held.includes(x)) && strip.buf.includes(c)) { Object.assign(c, tok); learnChord(c); return; }
+  const left = new Set(held.filter(x => x !== n));  // (n itself isn't in the strip yet)
+  while (strip.count) {
+    const last = strip.buf[strip.head];
+    if (last.name || !left.delete(last.notes[0])) break;
+    strip.head = (strip.head - 1 + STRIP_N) % STRIP_N;
+    strip.count--;
+  }
+  stripPush(strip.chord = tok);
+  learnChord(tok);
+}
+// [suffix, intervals from the root]; the bass note's root tried first, so C E G is C, E G C is C/E
+const CHORDS = [["maj", [0, 4, 7]], ["m", [0, 3, 7]], ["dim", [0, 3, 6]], ["aug", [0, 4, 8]], ["sus2", [0, 2, 7]],
+  ["sus4", [0, 5, 7]], ["7", [0, 4, 7, 10]], ["maj7", [0, 4, 7, 11]], ["m7", [0, 3, 7, 10]], ["m7b5", [0, 3, 6, 10]],
+  ["dim7", [0, 3, 6, 9]], ["6", [0, 4, 7, 9]], ["m6", [0, 3, 7, 9]], ["add9", [0, 2, 4, 7]], ["mMaj7", [0, 3, 7, 11]]];
+// MIDI notes -> {name: "Cmaj7" or "Am/C", type (CHORDS' suffix, chords.json's key), root, bass (pitch classes)}; null
+// under 3 pitch classes or no shape here
+function chordName(notes) {
+  const pcs = [...new Set(notes.map(n => n % 12))];
+  if (pcs.length < 3) return null;
+  const bass = Math.min(...notes) % 12, roots = [bass, ...pcs.filter(p => p !== bass)];
+  for (const r of roots) {
+    const rel = pcs.map(p => (p - r + 12) % 12).sort((a, b) => a - b).join();
+    const hit = CHORDS.find(([, iv]) => iv.join() === rel);
+    if (hit) return { name: r === bass ? NAMES[r] + hit[0] : `${NAMES[r]}${hit[0] === "maj" ? "" : hit[0]}/${NAMES[bass]}`,
+                      type: hit[0], root: r, bass };                     // (C/E: a major chord's slash name)
+  }
+  return null;                                      // (no shape here: a cluster, two tracks' notes: shown as notes)
+}
+
+// ---- a chord clicked: what it is (chords.json, written once: each shape's sound, why, when to use it) and the gaps
+// between the notes held, low to high (semitones, the keys between) ----
+let chordInfo = null;
+const chordsJson = () => chordInfo || (chordInfo = fetch("chords.json").then(r => r.json()).catch(e => { chordInfo = null; throw e; }));
+// the chord on keys lo..hi (white keys at both ends): the held keys lit (the root in the accent color, the rest
+// yellow) and named under the keys
+const FM1_KEYS = [53, 79];                           // the FM-1's 27 note keys, F3..G5 (OCT 0; SMK37.md)
+function chordKeys(notes, root, lo, hi) {
+  const NS = "http://www.w3.org/2000/svg", WHITE = [0, 2, 4, 5, 7, 9, 11], W = 14, H = 64, BW = 9, BH = 40;
+  const svg = document.createElementNS(NS, "svg"), mk = (tag, a) => {
+    const e = document.createElementNS(NS, tag);
+    for (const k in a) e.setAttribute(k, a[k]);
+    svg.append(e);
+    return e;
+  };
+  const whites = [], blacks = [];
+  for (let n = lo, x = 0; n <= hi; n++)
+    if (WHITE.includes(n % 12)) { whites.push([n, x]); x += W; } else blacks.push([n, x - BW / 2]);
+  const width = whites.length * W;
+  svg.setAttribute("viewBox", `0 0 ${width} ${H + 12}`);
+  svg.setAttribute("class", "keys");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "The chord on a keyboard: " + notes.slice().sort((a, b) => a - b).map(noteName).join(" "));
+  const fill = n => notes.includes(n) ? (n % 12 === root ? "var(--accent)" : "#e6c229") : null;
+  for (const [n, x] of whites) mk("rect", { x: x + .5, y: .5, width: W - 1, height: H, rx: 2, style: `fill:${fill(n) || "#eee"};stroke:#333` });
+  for (const [n, x] of blacks) mk("rect", { x, y: .5, width: BW, height: BH, rx: 1.5, style: `fill:${fill(n) || "#111"};stroke:#000` });
+  for (const n of notes.filter(n => n >= lo && n <= hi)) {
+    const w = whites.find(([m]) => m === n), b = blacks.find(([m]) => m === n), cx = w ? w[1] + W / 2 : b[1] + BW / 2;
+    mk("text", { x: cx, y: H + 9, "text-anchor": "middle", style: "fill:var(--fg);font:bold 6px ui-monospace,Menlo,monospace" })
+      .textContent = noteName(n);
+  }
+  // each white key: its solfège (fixed do: C is Do) over its letter; the C's with their octave, for finding your place
+  const SOLFA = { 0: "Do", 2: "Re", 4: "Mi", 5: "Fa", 7: "Sol", 9: "La", 11: "Ti" };
+  for (const [n, x] of whites) {
+    const lit = fill(n), ink = lit === "var(--accent)" ? "#fff" : lit ? "#222" : "#666";
+    mk("text", { x: x + W / 2, y: H - 10, "text-anchor": "middle", style: `fill:${ink};font:bold 4.5px sans-serif` })
+      .textContent = SOLFA[n % 12];
+    mk("text", { x: x + W / 2, y: H - 4, "text-anchor": "middle", style: `fill:${ink};font:4px sans-serif` })
+      .textContent = n % 12 ? NAMES[n % 12] : noteName(n);
+  }
+  const xs = notes.filter(n => n >= lo && n <= hi).map(n => (whites.find(([m]) => m === n) || blacks.find(([m]) => m === n))[1]);
+  const box = document.createElement("div");
+  box.className = "kbox";
+  box.dataset.mid = xs.length ? ((Math.min(...xs) + Math.max(...xs) + W) / 2 / width) : .5;
+  box.append(svg);
+  return box;
+}
+// a keyboard wider than its box (a phone): scrolled so the chord's middle is in the middle
+function centreKeys(root) {
+  for (const b of root.querySelectorAll(".kbox")) b.scrollLeft = b.dataset.mid * b.scrollWidth - b.clientWidth / 2;
+}
+// LEARN CHORDS (off at each load): each chord played opens its dialog, or turns the open one to it; a chord that
+// grows while held updates it. The dialog's checkbox and the strip's button are the one switch
+let learn = false, shown = null;
+function setLearn(on) {
+  learn = on;
+  $("m-learn").setAttribute("aria-pressed", String(on));
+  $("cd-learn").checked = on;
+}
+function learnChord(tok) { if (learn && !quiz.on) showChord(tok); }
+
+// ---- TEST CHORDS: it names a chord, you play it on the FM-1; right (the notes held are exactly the chord's pitch
+// classes, any octave and order; on the inversion level the lowest note too), and after you let go, the next. LEVELS
+// from easy to hard, PASS right ones each; the level is kept in this browser ----
+const WHITE_ROOTS = [0, 2, 4, 5, 7, 9, 11], ALL_ROOTS = [...Array(12).keys()], PASS = 5;
+const LEVELS = [
+  { name: "Major triads on the white keys", roots: [0, 5, 7], types: ["maj"] },
+  { name: "Minor triads on the white keys", roots: [9, 2, 4], types: ["m"] },
+  { name: "Major and minor on every key", roots: ALL_ROOTS, types: ["maj", "m"] },
+  { name: "Suspended, diminished, augmented", roots: WHITE_ROOTS, types: ["sus2", "sus4", "dim", "aug"] },
+  { name: "Seventh chords", roots: ALL_ROOTS, types: ["7", "maj7", "m7"] },
+  { name: "Colour chords", roots: ALL_ROOTS, types: ["m7b5", "dim7", "6", "m6", "add9", "mMaj7"] },
+  { name: "Inversions (the lowest note counts)", roots: ALL_ROOTS, types: ["maj", "m"], inv: true },
+];
+const quiz = { on: false, level: 0, right: 0, target: null, armed: true, hint: false, timer: 0 };
+const store = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+                set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+const ivOf = type => CHORDS.find(([t]) => t === type)[1];
+function quizPick() {                               // a new target, not the one before
+  const L = LEVELS[quiz.level];
+  let t;
+  do {
+    const root = L.roots[Math.random() * L.roots.length | 0], type = L.types[Math.random() * L.types.length | 0];
+    const iv = ivOf(type), bass = L.inv ? (root + iv[1 + (Math.random() * (iv.length - 1) | 0)]) % 12 : root;
+    t = { root, type, bass, pcs: iv.map(i => (root + i) % 12).sort((a, b) => a - b),
+          name: bass === root ? NAMES[root] + type : `${NAMES[root]}${type === "maj" ? "" : type}/${NAMES[bass]}` };
+  } while (quiz.target && t.name === quiz.target.name && (LEVELS[quiz.level].roots.length > 1 || LEVELS[quiz.level].types.length > 1));
+  quiz.target = t; quiz.hint = false;
+  quizShow("");
+}
+function quizVoicing(t) {                           // the target on the FM-1's keys: the bass from F3 up, the rest above
+  const b = FM1_KEYS[0] + ((t.bass - FM1_KEYS[0] % 12 + 12) % 12), rest = t.pcs.filter(p => p !== t.bass);
+  return [b, ...rest.map(p => b + ((p - t.bass + 12) % 12))].sort((x, y) => x - y);
+}
+async function quizShow(say, cls = "", notes = null) {
+  const t = quiz.target, L = LEVELS[quiz.level];
+  $("q-level").value = quiz.level;
+  $("q-count").textContent = `${quiz.right} / ${PASS}`;
+  $("q-bar").style.width = `${100 * quiz.right / PASS}%`;
+  $("q-target").textContent = t.name;
+  $("q-say").textContent = say;
+  $("q-say").className = cls;
+  let kind = "";
+  try { kind = (await chordsJson()).chords[t.type].name; } catch (e) {}
+  $("q-kind").textContent = kind + (t.bass !== t.root ? `, ${NAMES[t.bass]} the lowest note` : "");
+  const show = notes || (quiz.hint ? quizVoicing(t) : null);
+  $("q-keys").replaceChildren(...(show ? [chordKeys(show, t.root, FM1_KEYS[0], FM1_KEYS[1])] : []));
+  centreKeys($("q-keys"));
+}
+function quizStart() {
+  quiz.on = true; quiz.right = 0; quiz.target = null; quiz.armed = true;
+  quiz.level = Math.min(LEVELS.length - 1, Math.max(0, +store.get("skiff-quiz-level") || 0));
+  if ($("chord-dlg").open) $("chord-dlg").close();
+  quizPick();
+  if (!$("quiz-dlg").open) $("quiz-dlg").showModal();
+}
+function quizStop() { quiz.on = false; clearTimeout(quiz.timer); if ($("quiz-dlg").open) $("quiz-dlg").close(); }
+function quizLevel(l) {
+  quiz.level = l; quiz.right = 0; quiz.target = null;
+  store.set("skiff-quiz-level", String(l));
+  quizPick();
+}
+function quizHear() {                               // after each note on and off
+  if (!quiz.on || !quiz.target) return;
+  const held = [...mlog.held.values()].filter(e => e.ch !== 10).map(e => e.n);
+  if (!quiz.armed) { if (!held.length) { quiz.armed = true; quizPick(); } return; }
+  if (!held.length) { $("q-say").textContent = ""; return; }
+  const t = quiz.target, pcs = [...new Set(held.map(n => n % 12))].sort((a, b) => a - b);
+  const same = pcs.join() === t.pcs.join(), bassOk = Math.min(...held) % 12 === t.bass;
+  if (same && bassOk) {
+    quiz.armed = false;
+    quiz.right++;
+    if (quiz.right >= PASS) {
+      const last = quiz.level === LEVELS.length - 1;
+      quizShow(last ? `✓ ${t.name}. Every level done! Keep going, or pick a level.` :
+                      `✓ ${t.name}. Level ${quiz.level + 2}: ${LEVELS[quiz.level + 1].name}. Let go to start.`, "ok", held);
+      if (!last) { quiz.level++; store.set("skiff-quiz-level", String(quiz.level)); }
+      quiz.right = 0;
+    } else quizShow(`✓ ${t.name}! Let go for the next one.`, "ok", held);
+    return;
+  }
+  if (pcs.length >= t.pcs.length) {                 // (a whole chord held, not this one; fewer notes: still building)
+    const ch = chordName(held);
+    $("q-say").textContent = same ? `The notes are right: put ${NAMES[t.bass]} at the bottom.` :
+      `Not quite: that's ${ch ? ch.name : held.slice().sort((a, b) => a - b).map(noteName).join(" ")}.`;
+    $("q-say").className = "no";
+  } else { $("q-say").textContent = ""; }
+}
+$("q-level").replaceChildren(...LEVELS.map((L, i) =>
+  Object.assign(document.createElement("option"), { value: i, textContent: `${i + 1}. ${L.name}` })));
+$("q-level").onchange = e => quizLevel(+e.target.value);
+$("q-hint").onclick = () => { quiz.hint = true; quizShow($("q-say").textContent, $("q-say").className); };
+$("q-skip").onclick = () => { quiz.armed = true; quizPick(); };
+$("q-stop").onclick = quizStop;
+$("quiz-dlg").addEventListener("close", () => { quiz.on = false; });
+$("m-test").onclick = quizStart;
+function openChordDlg() { if (!$("chord-dlg").open) $("chord-dlg").showModal(); }
+async function showChord(tok) {
+  shown = tok;
+  const box = $("cd-body"), el = (tag, text, cls) => Object.assign(document.createElement(tag), { textContent: text }, cls ? { className: cls } : {});
+  let info;
+  try { info = await chordsJson(); }
+  catch (e) { box.replaceChildren(el("p", "Couldn't load chords.json: " + e.message)); openChordDlg(); return; }
+  const c = info.chords[tok.type], ns = tok.notes.slice().sort((a, b) => a - b);
+  const out = [el("h3", tok.name), el("div", `${c.name} · ${ns.map(noteName).join(" ")}` +
+                                              (tok.spread ? " · built up one by one" : " · struck together"), "sub")];
+  out[0].id = "cd-title";
+  // the FM-1's keys, on the OCT that holds the chord (the nearest OCT 0 when one does; else the one with the most of it)
+  let oct = 0, best = -1;
+  for (const k of [0, 1, -1, 2, -2, 3, -3, 4, -4]) {
+    const n = ns.filter(x => x >= FM1_KEYS[0] + 12 * k && x <= FM1_KEYS[1] + 12 * k).length;
+    if (n > best) { best = n; oct = k; }
+  }
+  const fLo = FM1_KEYS[0] + 12 * oct, fHi = FM1_KEYS[1] + 12 * oct;
+  out.push(el("div", `FM-1 keys${oct ? `, OCT ${oct > 0 ? "+" : "−"}${Math.abs(oct)}` : ""} (${noteName(fLo)}–${noteName(fHi)})` +
+                     (best < ns.length ? `: ${ns.filter(x => x < fLo || x > fHi).map(noteName).join(", ")} ` +
+                                         `${ns.length - best === 1 ? "is" : "are"} past its 27 keys` : ""), "kb"),
+           chordKeys(ns, tok.root, fLo, fHi));
+  {
+    const deg = c.semitones.map((st, i) => `${NAMES[(tok.root + st) % 12]} = ${c.degrees[i]} ` +
+                                           (st ? `(${info.intervals[st]}, ${st} from the root)` : "(the root)"));
+    out.push(el("h4", "The shape"), el("p", deg.join(" · ")));
+  }
+  out.push(el("h4", "The notes, low to high"));
+  const ul = document.createElement("ul");
+  for (let i = 1; i < ns.length; i++) {
+    const d = ns[i] - ns[i - 1], between = [];
+    for (let n = ns[i - 1] + 1; n < ns[i]; n++) between.push(noteName(n));
+    ul.append(el("li", `${noteName(ns[i - 1])} → ${noteName(ns[i])}: ${d} semitone${d === 1 ? "" : "s"} ` +
+      `(${d % 12 === 0 && d ? "octave" + (d > 12 ? "s" : "") : info.intervals[d % 12] + (d > 12 ? " + octave" : "")}), ` +
+      (between.length ? `${between.length} key${between.length === 1 ? "" : "s"} skipped` +
+                        (between.length <= 6 ? `: ${between.join(" ")}` : "") : "no keys skipped")));
+  }
+  out.push(ul, el("h4", "Sound"), el("p", c.sound), el("h4", "Why"), el("p", c.why), el("h4", "When to use it"), el("p", c.use));
+  if (tok.bass !== tok.root) out.push(el("h4", "The slash"), el("p", info.inversion));
+  if (shown !== tok) return;                        // (a newer chord came while chords.json loaded)
+  box.replaceChildren(...out);
+  openChordDlg();
+  centreKeys(box);
+}
+$("chord-dlg").addEventListener("click", e => { if (e.target === $("chord-dlg")) $("chord-dlg").close(); });   // (the backdrop)
+function stripRender() {
+  if (!strip.dirty) return;
+  strip.dirty = false;
+  const out = [];
+  for (let i = 0; i < strip.count; i++) {           // the newest first; real spaces between (a copied line keeps them)
+    const tok = strip.buf[(strip.head - i + STRIP_N) % STRIP_N];
+    const names = tok.notes.slice().sort((a, b) => b - a).map(noteName).join(" ");
+    if (i) out.push(" ");
+    if (!tok.name) { out.push(names); continue; }
+    const b = Object.assign(document.createElement("span"), { className: tok.spread ? "chord spread" : "chord",
+      textContent: `(♫ ${tok.name}: ${names})`, tabIndex: 0, title: "What's this chord?" });
+    b.setAttribute("role", "button");
+    b.onclick = () => showChord(tok);
+    b.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showChord(tok); } };
+    out.push(b);
+  }
+  $("m-strip").replaceChildren(...out);
+}
+function midiMsg(d, t) {                            // one message (Web MIDI hands them whole) at t ms
+  const ty = d[0] & 0xF0, ch = (d[0] & 15) + 1, key = ch * 128 + d[1];
+  if (ty === 0x90 && d[2]) {
+    const e = { t, ch, n: d[1], v: d[2], len: -1 };
+    mlog.notes.push(e);
+    if (mlog.notes.length > MIDI_KEEP) mlog.notes.splice(0, mlog.notes.length - MIDI_KEEP);
+    mlog.held.set(key, e);
+    stripNote(d[1], ch);
+  } else if (ty === 0x80 || ty === 0x90) {
+    const e = mlog.held.get(key);
+    if (!e) return;
+    e.len = Math.max(0, t - e.t);
+    mlog.held.delete(key);
+    if (ch !== 10 && strip.chord?.notes.includes(d[1])) strip.chord = null;   // (a chord let go of is done: the
+                                                                               //  same notes again are a new one)
+  } else return;
+  quizHear();
+  mlog.dirty = true;
+}
+const secs = ms => (ms / 1000).toFixed(3);
+function noteLine(e, t0) {                          // "12.345 ch1 C4 v100 0.120" (time from t0, length in s)
+  return `${secs(e.t - t0).padStart(8)}  ch${e.ch}  ${noteName(e.n).padEnd(3)}  v${String(e.v).padEnd(3)}  ` +
+         (e.len < 0 ? "(held)" : secs(e.len));
+}
+function midiText(n) {                              // the last n notes as text, a header first; times from the first
+  const ns = mlog.notes.slice(-n);
+  if (!ns.length) return "";
+  return [`FM-1 notes as played${unitBpm ? `, the unit at ${unitBpm} BPM` : ""} (4/4). One a line: time from the ` +
+          "first (s), MIDI channel (the track's: T1 = channel 1), note (C4 = MIDI 60), velocity, " +
+          "length (s; held: not let go yet).", ...ns.map(e => noteLine(e, ns[0].t))].join("\n");
+}
+function midiRender() {
+  if (!mlog.dirty || !$("midi").open) return;
+  mlog.dirty = false;
+  const box = $("midilog"), atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 4, ns = mlog.notes;
+  box.textContent = ns.length ? ns.slice(-300).map(e => noteLine(e, ns[0].t)).join("\n") : "No notes yet: play.";
+  if (atEnd) box.scrollTop = box.scrollHeight;
+}
+async function copyText(t, what) {
+  if (!t) { $("m-note").textContent = "No notes yet."; return; }
+  try { await navigator.clipboard.writeText(t); $("m-note").textContent = `Copied ${what}.`; }
+  catch (e) { $("m-note").textContent = "Couldn't copy: " + e.message; }
+}
+
+let midiAccess = null, midiPort = null;
+function midiPick() {                               // the chosen input
+  if (midiPort) midiPort.onmidimessage = null;
+  midiPort = [...midiAccess.inputs.values()].find(i => i.id === $("m-in").value) || null;
+  if (midiPort) midiPort.onmidimessage = ev => midiMsg(ev.data, ev.timeStamp);
+  $("m-note").textContent = midiPort ? `Listening to ${midiPort.name}.` : "No MIDI input.";
+}
+function midiInputs() {                             // the list; the FM-1's by its name, unless another was picked
+  const sel = $("m-in"), ins = [...midiAccess.inputs.values()], was = sel.value;
+  sel.replaceChildren(...ins.map(i => Object.assign(document.createElement("option"), { value: i.id, textContent: i.name })));
+  const fm = ins.find(i => i.id === was) || ins.find(i => /felucca|fm-1|skiff|smk|mke/i.test(i.name)) || ins[0];
+  if (fm) sel.value = fm.id;
+  sel.disabled = !ins.length;
+  midiPick();
+}
+
+let mlogAt = 0;
+function frame(t) {
+  if (dirty) { ctx.putImageData(img, 0, 0); dirty = false; }
+  if (t - mlogAt > 100) { mlogAt = t; midiRender(); stripRender(); }   // (the log at most 10 times a second)
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+let port = null;                                    // connected, for the status line
+
+// ---- the screen over USB MIDI: loom_mirror.js, cmds 0x50-0x54 (not the editor's 83/84) ----
+const MIRROR_PORT = /fm-1|loom|smk|elite|mke-p37|starry|felucca|composite|sinco|usb-midi/i;
+let mx = null;                                       // {access, input, output, on, keep, asked, heard}
+function sxSend(op) {                                // 0 stop, 1 keep on, 2 start again (a full redraw)
+  if (!mx) return;
+  try { mx.output.send(mrRequest(op)); } catch (e) { /* unplugged: statechange says so */ }
+}
+let lastAsk = 0;
+function askAgain() {
+  const t = performance.now();
+  if (t - lastAsk < 1000) return;
+  lastAsk = t;
+  mirror.resync();
+  sxSend(2);
+}
+mirror = createLoomMirror({
+  rect: paintRect,
+  hello(h) {
+    if (mx) { clearTimeout(mx.asked); mx.heard = performance.now(); }
+    if (!h.on) { setHint("The FM-1 stopped mirroring."); return; }
+    if (h.w === 240 && h.h === 240) { setHint(null); say(); }
+    else setHint(`This page draws a 240×240 screen; the FM-1 says ${h.w}×${h.h}.`);
+  },
+  gap() { askAgain(); },
+});
+function onMirror(e) {
+  if (mx) mx.heard = performance.now();
+  mirror.feed(e.data);
+}
+async function openMidi() {
+  let access;
+  try { access = await navigator.requestMIDIAccess({ sysex: true }); }
+  catch (e) { say("MIDI (with SysEx) isn't allowed for this page: allow it, then Connect again."); return; }
+  const outs = [...access.outputs.values()];
+  const pair = [...access.inputs.values()].filter(i => i.state !== "disconnected" && MIRROR_PORT.test(i.name || ""))
+    .map(i => [i, outs.find(o => o.name === i.name && o.state !== "disconnected")]).find(([, o]) => o);
+  if (!pair) { say("No FM-1 on USB MIDI: plugged in? The port is named LOOM-8 FM-1."); return; }
+  const [input, output] = pair;
+  mx = { access, input, output, on: onMirror, keep: 0, asked: 0, heard: performance.now() };
+  input.addEventListener("midimessage", mx.on);
+  access.onstatechange = e => { if (mx && e.port === mx.input && e.port.state === "disconnected") { say("Unplugged"); shut(); } };
+  port = { midi: true };
+  buttons(true);
+  setHint("Waiting for the screen over USB MIDI…");
+  mx.asked = setTimeout(() => setHint("No hello from the FM-1. Another app may have the port, or this is not LOOM-8."), 2500);
+  sxSend(2);
+  mx.keep = setInterval(() => {
+    if (!mx) return;
+    if (performance.now() - mx.heard > 4000) {
+      mirror.resync();
+      sxSend(2);
+      setHint("No answer from the FM-1. Asking again…");
+    } else sxSend(1);                              // keep-alive: the unit stops after 6 s without one
+  }, 2000);
+}
+
+async function shut() {
+  if (mx) {
+    sxSend(0);
+    clearInterval(mx.keep); clearTimeout(mx.asked);
+    mx.input.removeEventListener("midimessage", mx.on);
+    mx.access.onstatechange = null;
+    mx = null;
+  }
+  port = null;
+  buttons(false);
+  setHint("Disconnected. Press Connect to show the screen again.");
+}
+
+function buttons(on) {
+  $("connect").disabled = on;
+  $("disconnect").disabled = !on;
+  $("resync").disabled = !on;
+  say();
+  keepAwake(on);
+}
+let wake = null;                                     // a phone's screen stays on while the FM-1's is shown
+async function keepAwake(on) {
+  try {
+    if (on && !wake && navigator.wakeLock && document.visibilityState === "visible") {
+      wake = await navigator.wakeLock.request("screen");
+      wake.addEventListener("release", () => { wake = null; });
+    } else if (!on && wake) {
+      const w = wake; wake = null; await w.release();
+    }
+  } catch (e) { /* (not allowed, or no battery left for it) */ }
+}
+document.addEventListener("visibilitychange", () => { if (port) keepAwake(true); });   // (released when hidden)
+function setHint(t) {
+  $("hint").hidden = t === null;
+  if (t) $("hintText").textContent = t;
+}
+let lastBytes = 0, lastFrames = 0, note = "";
+function say(t) {
+  if (t !== undefined) note = t;
+  $("status").textContent = note || (port ? "Connected" : "Not connected");
+}
+setInterval(() => {                                  // the rate, once a second (counted here; the unit sends no load)
+  if (!port || !$("hint").hidden) return;
+  const kb = (mirror.stats.bytes - lastBytes) / 1024;
+  const n = (mirror.stats.rects + mirror.stats.fills) - lastFrames;
+  lastBytes = mirror.stats.bytes; lastFrames = mirror.stats.rects + mirror.stats.fills;
+  note = "";
+  const gaps = mirror.stats.gaps ? ` · ${mirror.stats.gaps} gaps` : "";
+  $("status").textContent = `Connected · ${kb.toFixed(1)} KB/s · ${n} updates/s${gaps}`;
+}, 1000);
+
+$("connect").onclick = () => openMidi();
+$("disconnect").onclick = () => shut();
+$("resync").onclick = () => askAgain();
+$("full").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.body.requestFullscreen();
+document.addEventListener("keydown", e => {
+  if (e.key === "f" && !e.metaKey && !e.ctrlKey && !e.target.closest("input, textarea, [contenteditable]")) $("full").click();
+});
+canvas.ondblclick = () => $("full").click();
+async function midiListen() {                      // at once: the page's MIDI allowed before (or now) listens
+  if (!navigator.requestMIDIAccess) { $("m-note").textContent = "This browser has no Web MIDI: use Chrome or Edge."; return; }
+  try { midiAccess = midiAccess || await navigator.requestMIDIAccess(); }
+  catch (e) {
+    $("m-note").textContent = "MIDI isn't allowed for this page.";
+    $("m-allow").hidden = false;
+    return;
+  }
+  $("m-allow").hidden = true;
+  midiAccess.onstatechange = () => midiInputs();
+  midiInputs();
+}
+$("m-allow").onclick = () => midiListen();
+$("m-in").onchange = () => midiPick();
+$("m-copy").onclick = e => {
+  if (e.target.tagName === "INPUT") return;          // (clicking the number)
+  const n = Math.max(1, +$("m-n").value || 16);
+  copyText(midiText(n), `the last ${Math.min(n, mlog.notes.length)} notes`);
+};
+$("m-all").onclick = () => copyText(midiText(MIDI_KEEP), `all ${mlog.notes.length} notes`);
+$("m-clear").onclick = () => { midiReset(); $("m-note").textContent = "Cleared."; };
+$("midi").ontoggle = () => { mlog.dirty = true; midiRender(); };
+$("m-sum").addEventListener("click", e => {   // (only "▸ Notes played" opens it: the strip
+  if (e.detail && !e.target.closest(".m-tog")) e.preventDefault();     //  is for selecting and its chords; detail 0: a key)
+});
+$("m-learn").onclick = () => setLearn(!learn);
+$("cd-learn").onchange = e => setLearn(e.target.checked);
+$("m-line").onclick = async () => {
+  const b = $("m-line"), t = $("m-strip").textContent;
+  try { await navigator.clipboard.writeText(t); b.textContent = t ? "Copied" : "Nothing yet"; }
+  catch (e) { b.textContent = "Couldn't copy"; }
+  setTimeout(() => { b.textContent = "Copy"; }, 1200);
+};
+midiListen();
+
+if (navigator.requestMIDIAccess) {
+  setHint("Plug the FM-1 in over USB and press Connect: the screen comes over USB MIDI (allow MIDI with SysEx).");
+  navigator.permissions?.query({ name: "midi", sysex: true })   // allowed before: straight on
+    .then(p => { if (p.state === "granted" && !port) openMidi(); }).catch(() => {});
+} else {
+  $("connect").disabled = true;
+  setHint(!globalThis.isSecureContext ?                  // (Web MIDI is hidden on a plain http:// page that isn't localhost)
+    `MIDI is off on this page: it isn't https or localhost. In Chrome, allow ${globalThis.location?.origin} under ` +
+    "chrome://flags/#unsafely-treat-insecure-origin-as-secure, relaunch, and reload." :
+    "This browser has no Web MIDI, so it can't reach the FM-1. Use Chrome or Edge on a computer or Android.");
+}
+</script>
+</body>
+</html>
