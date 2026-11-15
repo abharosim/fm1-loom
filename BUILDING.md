@@ -57,6 +57,10 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 `./build.sh --release 0.1` makes a release build: the package is `app/build/loom-0.1.fwsc`, its identity
 FM-1_10XXYYZZ (a dev build's is FM-1_1000).
 
+On Linux x86-64, `tools/ci_build.sh` does that setup and then `./build.sh`: Pillow with libraqm, JieLi's
+clang into `~/.jieli/toolchain`, and the three AC79 boot files from tag `AC79NN_SDK_V1.2.1_2023-12-13`
+(their SHA-256 sums checked). The package is `app/build/loom.fwsc`. A dev package is not a `--release` build.
+
 The build generates `app/build/gen/` (fm1-base's fonts for its own screens, LOOM-8's fonts, the wavetables, the
 factory samples, the screen reader's words link, this build's number). It runs LOOM-8's size pass
 (`tools/size_fns.py`: the code that never runs per sample built with LLVM's `minsize`), and checks: no
