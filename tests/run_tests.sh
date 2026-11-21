@@ -46,6 +46,8 @@ if command -v node >/dev/null 2>&1; then           # the samples page's bank aga
     run backup-web node tests/host/backup_web.mjs "$PY"
     # the installer's steps (app/web/install_app.js: LOOM-8's sounds into the bank) against a simulated FM-1
     run install-web node tests/host/install_web.mjs "$PY"
+    # the display page's decoder against the firmware's own mirror encoder (base/device/mirror.c)
+    run display-mirror node tests/host/display_mirror_test.mjs
 else
     echo "  skip samples-web (no node)"
 fi

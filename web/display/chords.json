@@ -1,0 +1,278 @@
+{
+  "about": "What display.html's Notes played strip says about a chord it names. One entry per chord shape (the key is the name's suffix after the root, as display.html's CHORDS has it). semitones: from the root, in pitch classes. degrees: the same notes as scale degrees.",
+  "intervals": [
+    "unison",
+    "minor 2nd",
+    "major 2nd",
+    "minor 3rd",
+    "major 3rd",
+    "perfect 4th",
+    "tritone",
+    "perfect 5th",
+    "minor 6th",
+    "major 6th",
+    "minor 7th",
+    "major 7th"
+  ],
+  "inversion": "The part after the slash is the lowest note held. When it isn't the root the chord is an inversion: the same chord with another of its notes underneath. Inversions sound less settled than root position and let a bass line move by small steps (C → C/E → F).",
+  "chords": {
+    "maj": {
+      "name": "Major triad",
+      "semitones": [
+        0,
+        4,
+        7
+      ],
+      "degrees": [
+        "1",
+        "3",
+        "5"
+      ],
+      "sound": "Bright, stable, resolved.",
+      "why": "A major 3rd (4 semitones) on the root, then a minor 3rd (3) up to the perfect 5th (7). The 5th is the most consonant interval after the octave, and the major 3rd lines up with the root's own overtones (the 4th, 5th and 6th harmonics are a major triad), so it sounds settled.",
+      "use": "Home and anchor chords: I, IV and V in a major key (C, F, G in C major); III, VI and VII in a minor key. Endings, choruses, anything meant to feel confident or happy."
+    },
+    "m": {
+      "name": "Minor triad",
+      "semitones": [
+        0,
+        3,
+        7
+      ],
+      "degrees": [
+        "1",
+        "♭3",
+        "5"
+      ],
+      "sound": "Darker and sadder, but still stable.",
+      "why": "The major triad with its 3rd one semitone lower: a minor 3rd (3) then a major 3rd (4) to the same perfect 5th. The 5th keeps it stable; the lowered 3rd sits against the root's overtones, which we hear as darker.",
+      "use": "i, iv and v in a minor key; ii, iii and vi in a major key (Dm, Em, Am in C major). Moody, melancholic or cinematic progressions; vi gives a major-key song a minor turn."
+    },
+    "dim": {
+      "name": "Diminished triad",
+      "semitones": [
+        0,
+        3,
+        6
+      ],
+      "degrees": [
+        "1",
+        "♭3",
+        "♭5"
+      ],
+      "sound": "Tense and unstable: it wants to move on.",
+      "why": "Two minor 3rds stacked. Root to ♭5 is a tritone (6 semitones, half an octave), the most unstable interval, which pulls its two notes apart or together into the next chord.",
+      "use": "vii° in a major key (B° in C) leading to I; ii° in a minor key. A passing chord between two chords a whole step apart (C → C#° → Dm)."
+    },
+    "aug": {
+      "name": "Augmented triad",
+      "semitones": [
+        0,
+        4,
+        8
+      ],
+      "degrees": [
+        "1",
+        "3",
+        "♯5"
+      ],
+      "sound": "Dreamy, eerie, unresolved.",
+      "why": "Two major 3rds stacked, so it splits the octave into three equal parts: C+, E+ and G#+ are the same three notes. With no interval that marks one note as the root, the ear can't settle.",
+      "use": "A passing chord that raises the 5th by a semitone: C → C+ → C6, or I → I+ → IV (C → C+ → F). Mystery, dream sequences, film tension."
+    },
+    "sus2": {
+      "name": "Suspended 2nd",
+      "semitones": [
+        0,
+        2,
+        7
+      ],
+      "degrees": [
+        "1",
+        "2",
+        "5"
+      ],
+      "sound": "Open, airy, neither happy nor sad.",
+      "why": "The 3rd, the note that makes a chord major or minor, is replaced by the 2nd. Without it the chord is ambiguous: root, 2nd and 5th are all close to the root's own overtones.",
+      "use": "Pads, ambient and synth-pop in place of a plain major or minor chord; it resolves to either one (Csus2 → C or Cm). Good when a melody's note would clash with the 3rd."
+    },
+    "sus4": {
+      "name": "Suspended 4th",
+      "semitones": [
+        0,
+        5,
+        7
+      ],
+      "degrees": [
+        "1",
+        "4",
+        "5"
+      ],
+      "sound": "Tension that wants to resolve.",
+      "why": "The 3rd is replaced by the 4th, one semitone above the major 3rd. The ear hears the 4th as a held-over note that should fall a semitone to the 3rd, so the chord asks to resolve.",
+      "use": "Before its major chord: Gsus4 → G → C at a cadence. Rock and pop riffs (sus4 ↔ major), drones; also on its own for a hovering feel."
+    },
+    "7": {
+      "name": "Dominant 7th",
+      "semitones": [
+        0,
+        4,
+        7,
+        10
+      ],
+      "degrees": [
+        "1",
+        "3",
+        "5",
+        "♭7"
+      ],
+      "sound": "Bluesy, restless, pulling toward the next chord.",
+      "why": "A major triad plus a minor 7th. Its 3rd and ♭7 are a tritone apart (B and F in G7), and a tritone resolves by each note stepping a semitone inward or outward: B → C, F → E, which is the C chord.",
+      "use": "V7 → I (G7 → C), the strongest resolution in tonal music. Secondary dominants that lead to another chord (A7 → Dm). Blues plays a 7th on every chord (C7, F7, G7)."
+    },
+    "maj7": {
+      "name": "Major 7th",
+      "semitones": [
+        0,
+        4,
+        7,
+        11
+      ],
+      "degrees": [
+        "1",
+        "3",
+        "5",
+        "7"
+      ],
+      "sound": "Lush, soft, jazzy, a little wistful.",
+      "why": "A major triad plus the major 7th, one semitone below the octave. That near-octave rubs gently against the root, which colors the chord without making it want to move.",
+      "use": "I and IV in jazz, neo-soul, lo-fi, house and city pop (Cmaj7 → Fmaj7 loops). Replace a plain major chord when it sounds too plain."
+    },
+    "m7": {
+      "name": "Minor 7th",
+      "semitones": [
+        0,
+        3,
+        7,
+        10
+      ],
+      "degrees": [
+        "1",
+        "♭3",
+        "5",
+        "♭7"
+      ],
+      "sound": "Mellow and smooth, less sad than a minor triad.",
+      "why": "A minor triad plus a minor 7th. Its top three notes are a major triad (Am7 = A + C E G), so it blends minor and major color and has no tritone to pull it anywhere.",
+      "use": "ii in a ii–V–I (Dm7 → G7 → Cmaj7); vi7 and iii7 in a major key. One- and two-chord vamps in funk, house, R&B and disco."
+    },
+    "m7b5": {
+      "name": "Half-diminished 7th (m7♭5)",
+      "semitones": [
+        0,
+        3,
+        6,
+        10
+      ],
+      "degrees": [
+        "1",
+        "♭3",
+        "♭5",
+        "♭7"
+      ],
+      "sound": "Dark and tense, but softer than fully diminished.",
+      "why": "A diminished triad plus a minor 7th. The tritone (root to ♭5) gives tension; the minor 7th on top is consonant against the ♭3, which softens it.",
+      "use": "ii in a minor ii–V–i (Bm7♭5 → E7 → Am); vii in a major key. Jazz ballads and noir moods."
+    },
+    "dim7": {
+      "name": "Diminished 7th",
+      "semitones": [
+        0,
+        3,
+        6,
+        9
+      ],
+      "degrees": [
+        "1",
+        "♭3",
+        "♭5",
+        "𝄫7"
+      ],
+      "sound": "Very tense, dramatic, suspenseful.",
+      "why": "Minor 3rds stacked all the way: it splits the octave into four equal parts, so there are only three different diminished 7th chords and any of its notes can be called the root. It holds two tritones, twice the pull of a dominant 7th.",
+      "use": "A leading chord a semitone below its target (G#dim7 → Am, C#dim7 → Dm). Passing chords, modulations to far keys, horror and silent-film drama."
+    },
+    "6": {
+      "name": "Major 6th",
+      "semitones": [
+        0,
+        4,
+        7,
+        9
+      ],
+      "degrees": [
+        "1",
+        "3",
+        "5",
+        "6"
+      ],
+      "sound": "Sweet, settled, retro.",
+      "why": "A major triad plus the major 6th, a whole step above the 5th. It adds color without the rub of a major 7th; it holds the same notes as the relative minor 7th (C6 = Am7 with C in the bass).",
+      "use": "The last chord of swing, doo-wop, bossa nova and 50s pop. Instead of a plain major chord on I or IV when a major 7th is too lush."
+    },
+    "m6": {
+      "name": "Minor 6th",
+      "semitones": [
+        0,
+        3,
+        7,
+        9
+      ],
+      "degrees": [
+        "1",
+        "♭3",
+        "5",
+        "6"
+      ],
+      "sound": "Dark, mysterious, noir.",
+      "why": "A minor triad plus the major 6th. The ♭3 and the 6th are a tritone apart (E♭ and A in Cm6), which gives a minor chord a sly, unresolved edge.",
+      "use": "The i chord in minor jazz, gypsy jazz and spy themes; iv6 in a minor key (Dm6 in A minor). The last step of a line cliché (Am → AmMaj7 → Am7 → Am6)."
+    },
+    "add9": {
+      "name": "Add 9",
+      "semitones": [
+        0,
+        2,
+        4,
+        7
+      ],
+      "degrees": [
+        "1",
+        "9",
+        "3",
+        "5"
+      ],
+      "sound": "Bright, shimmering, modern.",
+      "why": "A major triad plus the 9th (the 2nd, an octave up) and no 7th. The 9th sits a whole step from both the root and the 3rd, adding sparkle without the pull of a 7th. Played close together it's a cluster; spread the 9th an octave up for a cleaner sound.",
+      "use": "Pop, ballads and anthems in place of I or IV (Cadd9 → Fadd9). Open-voiced pads and arpeggios."
+    },
+    "mMaj7": {
+      "name": "Minor-major 7th",
+      "semitones": [
+        0,
+        3,
+        7,
+        11
+      ],
+      "degrees": [
+        "1",
+        "♭3",
+        "5",
+        "7"
+      ],
+      "sound": "Dark and suspenseful: the spy-film chord.",
+      "why": "A minor triad plus a major 7th. The major 7th wants to rise to the root while the minor 3rd colors it dark, and the 3rd-to-7th interval is an augmented 5th, which keeps it unresolved.",
+      "use": "The second step of a line cliché, where one voice falls a semitone at a time (Am → AmMaj7 → Am7 → Am6). Film noir, thriller and Bond-style endings."
+    }
+  }
+}

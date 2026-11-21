@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: MPL-2.0
+# A dev package (./build.sh, identity FM-1_1000) on a loom-dev-* tag. Separate from
+# release.yml, which builds signed vX.Y releases. This file does nothing until it is on
+# the default branch: a tag is built from the commit it points at.
+name: Dev firmware package
+
+on:
+  push:
+    tags: ['loom-dev-*']
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build loom.fwsc
+        run: tools/ci_build.sh
+      - name: Publish the pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sum=$(sha256sum app/build/loom.fwsc)
+          notes=$(printf '%s\n' \
+            "Dev package from \`./build.sh\` (identity FM-1_1000), not a \`--release\` build." \
+            "" \
+            "- Commit: \`$GITHUB_SHA\`" \
+            "- SHA-256: \`$sum\`" \
+            "" \
+            "Flash at your own risk. Hold OCT− and OCT+ for 5 seconds, then \`python3 base/tools/fm1_install.py loom.fwsc\`. Two failed starts open a safe mode; the web installer can put M-VAVE's firmware back.")
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" app/build/loom.fwsc --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" app/build/loom.fwsc --prerelease --title "$GITHUB_REF_NAME" --notes "$notes"
+          fi
